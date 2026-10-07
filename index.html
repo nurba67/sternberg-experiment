@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Sternberg Memory Scanning Experiment</title>
+
+    <!-- jsPsych -->
+    <script src="https://unpkg.com/jspsych@8.2.1"></script>
+
+    <!-- jsPsych CSS -->
+    <link
+        href="https://unpkg.com/jspsych@8.2.1/css/jspsych.css"
+        rel="stylesheet"
+    >
+
+    <!-- Plugins -->
+    <script src="https://unpkg.com/@jspsych/plugin-html-button-response@2.1.0"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@2.1.0"></script>
+    <script src="https://unpkg.com/@jspsych/plugin-survey-html-form@2.1.0"></script>
+
+    <style>
+        body {
+            background-color: white;
+        }
+
+        .memory-set {
+            font-size: 48px;
+            font-weight: bold;
+            letter-spacing: 20px;
+            margin-top: 100px;
+        }
+
+        .probe {
+            font-size: 64px;
+            font-weight: bold;
+            margin-top: 100px;
+        }
+
+        .instruction-text {
+            max-width: 800px;
+            margin: auto;
+            text-align: left;
+            font-size: 20px;
+            line-height: 1.6;
+        }
+
+        .participant-form {
+            max-width: 500px;
+            margin: auto;
+            font-size: 20px;
+        }
+
+        input {
+            font-size: 20px;
+            padding: 8px;
+        }
+    </style>
+</head>
+
+<body>
+</body>
+
+<script>
+
+    // ============================================================
+    // 1. INITIALIZE jsPsych
+    // ============================================================
+
+    const jsPsych = initJsPsych({
+        on_finish: function() {
+
+            // Получаем все экспериментальные данные
+            const data = jsPsych.data.get();
+
+            // Создаём CSV
+            const csv = data.csv();
+
+            // Скачиваем CSV-файл
+            const blob = new Blob([csv], {
+                type: "text/csv;charset=utf-8;"
+            });
+
+            const url = URL.createObjectURL(blob);
+
+            const downloadLink = document.createElement("a");
+            downloadLink.href = url;
+
+            const participantID =
+                jsPsych.data.get()
+                    .filter({trial_type: "survey-html-form"})
+                    .values()[0]?.response?.participant_id
+                || "unknown";
+
+            downloadLink.download =
+                "sternberg_" + participantID + ".csv";
+
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+
+            URL.revokeObjectURL(url);
+        }
+    });
+
+
+    // ============================================================
+    // 2. EXPERIMENT SETTINGS
+    // ============================================================
+
+    const SET_SIZES = [2, 4, 6];
+
+    // Сколько положительных и отрицательных trials
+    // для каждого размера множества.
+    const TRIALS_PER_CONDITION = 10;
+
+    // Значения, которые могут появляться
+    const DIGITS = [
+        "1", "2", "3", "4", "5",
+        "6", "7", "8", "9"
+    ];
+
+
+    // ============================================================
+    // 3. HELPER FUNCTIONS
+    // ============================================================
+
+    // Перемешивание массива
+    function shuffle(array) {
+        let arr = [...array];
+
+        for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+
+        return arr;
+    }
+
+
+    // Получить случайные уникальные цифры
+    function randomUniqueDigits(number) {
+
+        return shuffle(DIGITS).slice(0, number);
+
+    }
+
+
+    // Получить цифру, которой НЕТ в memory set
+    function getNegativeProbe(memorySet) {
+
+        const available = DIGITS.filter(
+            digit => !memorySet.includes(digit)
+        );
+
+        return available[
+            Math.floor(Math.random() * available.length)
+        ];
+    }
+
+
+    // ============================================================
+    // 4. PARTICIPANT ID
+    // ============================================================
+
+    const participant_form = {
+        type: jsPsychSurveyHtmlForm,
+
+        preamble: `
+            <h1>Sternberg Memory Scanning Experiment</h1>
+
+            <div class="instruction-text">
+                <p>
+                    Перед началом эксперимента введите
+                    идентификатор участника.
+                </p>
+
+                <p>
+                    Не используйте настоящее имя или другие
+                    персональные данные.
+                </p>
+            </div>
+        `,
+
+        html: `
+            <div class="participant-form">
+
+                <label for="participant_id">
+                    Participant ID:
+                </label>
+
+                <br><br>
+
+                <input
+                    type="text"
+                    id="participant_id"
+                    name="participant_id"
+                    required
+                    placeholder="например P01"
+                >
+
+            </div>
+        `,
+
+        button_label: "Продолжить"
+    };
+
+
+    // ============================================================
+    // 5. INFORMED CONSENT
+    // ============================================================
+
+    const consent_trial = {
+        type: jsPsychHtmlButtonResponse,
+
+        stimulus: `
+            <div class="instruction-text">
+
+                <h1>Согласие на участие</h1>
+
+                <p>
+                    Вы приглашены принять участие в учебном
+                    психологическом эксперименте по изучению
+                    процессов памяти.
+                </p>
+
+                <p>
+                    В эксперименте вам будут показываться
+                    небольшие наборы цифр. После этого появится
+                    одна цифра, и вам нужно будет определить,
+                    была ли она в предыдущем наборе.
+                </p>
+
+                <p>
+                    Участие добровольное. Вы можете прекратить
+                    участие в любой момент.
+                </p>
+
+                <p>
+                    Эксперимент предназначен для учебной
+                    репликации классического исследования
+                    Стернберга.
+                </p>
+
+                <p>
+                    Нажимая «Я согласен», вы подтверждаете,
+                    что добровольно участвуете в исследовании.
+                </p>
+
+            </div>
+        `,
+
+        choices: [
+            "Я согласен"
+        ]
+    };
+
+
+    // ============================================================
+    // 6. INSTRUCTIONS
+    // ============================================================
+
+    const instructions_trial = {
+        type: jsPsychHtmlButtonResponse,
+
+        stimulus: `
+            <div class="instruction-text">
+
+                <h1>Инструкция</h1>
+
+                <p>
+                    В каждом испытании сначала вам будет
+                    показан набор цифр.
+                </p>
+
+                <p>
+                    Постарайтесь запомнить все цифры.
+                </p>
+
+                <p>
+                    Затем появится одна цифра.
+                </p>
+
+                <p>
+                    Ваша задача определить:
+                    была ли эта цифра среди
+                    запомненных цифр.
+                </p>
+
+                <hr>
+
+                <p>
+                    Если цифра была в наборе:
+                </p>
+
+                <p>
+                    <strong>Нажмите F</strong>
+                </p>
+
+                <p>
+                    Если цифры не было:
+                </p>
+
+                <p>
+                    <strong>Нажмите J</strong>
+                </p>
+
+                <hr>
+
+                <p>
+                    Отвечайте как можно быстрее,
+                    но старайтесь не допускать ошибок.
+                </p>
+
+                <p>
+                    Сначала будет несколько тренировочных
+                    испытаний.
+                </p>
+
+            </div>
+        `,
+
+        choices: [
+            "Начать тренировку"
+        ]
+    };
+
+
+    // ============================================================
+    // 7. FIXATION
+    // ============================================================
+
+    const fixation_trial = {
+        type: jsPsychHtmlKeyboardResponse,
+
+        stimulus: `
+            <div style="font-size: 50px;">
+                +
+            </div>
+        `,
+
+        choices: "NO_KEYS",
+
+        trial_duration: 500
+    };
+
+
+    // ============================================================
+    // 8. MEMORY SET
+    // ============================================================
+
+    function createMemoryTrial(memorySet) {
+
+        return {
+            type: jsPsychHtmlKeyboardResponse,
+
+            stimulus: `
+                <div class="memory-set">
+                    ${memorySet.join(" ")}
+                </div>
+            `,
+
+            choices: "NO_KEYS",
+
+            trial_duration: 1500,
+
+            data: {
+                task: "memory_set",
+
+                set_size: memorySet.length,
+
+                memory_set: memorySet.join("")
+            }
+        };
+    }
+
+
+    // ============================================================
+    // 9. PROBE
+    // ============================================================
+
+    function createProbeTrial(
+        memorySet,
+        probe,
+        isPositive,
+        practice = false
+    ) {
+
+        return {
+            type: jsPsychHtmlKeyboardResponse,
+
+            stimulus: `
+                <div class="probe">
+                    ${probe}
+                </div>
+
+                <p style="font-size: 22px;">
+                    F = ДА &nbsp;&nbsp;&nbsp;&nbsp;
+                    J = НЕТ
+                </p>
+            `,
+
+            choices: ["f", "j"],
+
+            data: {
+                task: "probe",
+
+                set_size: memorySet.length,
+
+                memory_set: memorySet.join(""),
+
+                probe: probe,
+
+                condition: isPositive
+                    ? "positive"
+                    : "negative",
+
+                correct_response: isPositive
+                    ? "f"
+                    : "j",
+
+                practice: practice
+            },
+
+            on_finish: function(data) {
+
+                data.correct =
+                    data.response === data.correct_response;
+
+            }
+        };
+    }
+
+
+    // ============================================================
+    // 10. PRACTICE TRIALS
+    // ============================================================
+
+    const practice_trials = [];
+
+    const practice_sets = [
+        ["2", "7"],
+        ["1", "5", "8", "3"]
+    ];
+
+    const practice_probes = [
+        {
+            set: practice_sets[0],
+            probe: "7",
+            positive: true
+        },
+        {
+            set: practice_sets[1],
+            probe: "6",
+            positive: false
+        }
+    ];
+
+
+    practice_probes.forEach(item => {
+
+        practice_trials.push(
+            fixation_trial
+        );
+
+        practice_trials.push(
+            createMemoryTrial(item.set)
+        );
+
+        practice_trials.push(
+            createProbeTrial(
+                item.set,
+                item.probe,
+                item.positive,
+                true
+            )
+        );
+
+    });
+
+
+    // ============================================================
+    // 11. PRACTICE END
+    // ============================================================
+
+    const practice_end = {
+
+        type: jsPsychHtmlButtonResponse,
+
+        stimulus: `
+            <div class="instruction-text">
+
+                <h2>Тренировка закончена</h2>
+
+                <p>
+                    Теперь начнётся основная часть эксперимента.
+                </p>
+
+                <p>
+                    Старайтесь отвечать максимально быстро,
+                    сохраняя точность.
+                </p>
+
+                <p>
+                    Помните:
+                </p>
+
+                <p>
+                    <strong>F = цифра была в наборе</strong>
+                </p>
+
+                <p>
+                    <strong>J = цифры не было в наборе</strong>
+                </p>
+
+            </div>
+        `,
+
+        choices: [
+            "Начать эксперимент"
+        ]
+    };
+
+
+    // ============================================================
+    // 12. CREATE EXPERIMENTAL TRIALS
+    // ============================================================
+
+    let experimental_trials = [];
+
+
+    SET_SIZES.forEach(setSize => {
+
+        // Positive trials
+        for (
+            let i = 0;
+            i < TRIALS_PER_CONDITION;
+            i++
+        ) {
+
+            const memorySet =
+                randomUniqueDigits(setSize);
+
+            const probe =
+                memorySet[
+                    Math.floor(
+                        Math.random() * memorySet.length
+                    )
+                ];
+
+            experimental_trials.push({
+                type: "sequence",
+
+                timeline: [
+                    fixation_trial,
+                    createMemoryTrial(memorySet),
+                    createProbeTrial(
+                        memorySet,
+                        probe,
+                        true,
+                        false
+                    )
+                ],
+
+                data: {
+                    condition: "positive"
+                }
+            });
+
+        }
+
+
+        // Negative trials
+        for (
+            let i = 0;
+            i < TRIALS_PER_CONDITION;
+            i++
+        ) {
+
+            const memorySet =
+                randomUniqueDigits(setSize);
+
+            const probe =
+                getNegativeProbe(memorySet);
+
+            experimental_trials.push({
+                type: "sequence",
+
+                timeline: [
+                    fixation_trial,
+                    createMemoryTrial(memorySet),
+                    createProbeTrial(
+                        memorySet,
+                        probe,
+                        false,
+                        false
+                    )
+                ],
+
+                data: {
+                    condition: "negative"
+                }
+            });
+
+        }
+
+    });
+
+
+    // ============================================================
+    // 13. RANDOMIZE TRIAL ORDER
+    // ============================================================
+
+    experimental_trials =
+        shuffle(experimental_trials);
+
+
+    // ============================================================
+    // 14. FINAL SCREEN
+    // ============================================================
+
+    const final_trial = {
+
+        type: jsPsychHtmlButtonResponse,
+
+        stimulus: `
+            <div class="instruction-text">
+
+                <h1>Эксперимент завершён</h1>
+
+                <p>
+                    Спасибо за участие.
+                </p>
+
+                <p>
+                    Ваши данные будут сохранены
+                    в CSV-файл.
+                </p>
+
+                <p>
+                    Передайте полученный файл
+                    исследователю.
+                </p>
+
+            </div>
+        `,
+
+        choices: [
+            "Завершить"
+        ]
+    };
+
+
+    // ============================================================
+    // 15. BUILD TIMELINE
+    // ============================================================
+
+    const timeline = [
+
+        participant_form,
+
+        consent_trial,
+
+        instructions_trial,
+
+        ...practice_trials,
+
+        practice_end,
+
+        ...experimental_trials,
+
+        final_trial
+
+    ];
+
+
+    // ============================================================
+    // 16. START EXPERIMENT
+    // ============================================================
+
+    jsPsych.run(timeline);
+
+</script>
+
+</html>
